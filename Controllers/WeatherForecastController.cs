@@ -29,4 +29,14 @@ public class WeatherForecastController : ControllerBase
         WeatherInfo response = mapper.mapFrom(proxy_response);
         return Ok(response);
     }
+
+    [HttpPost(Name = "GetWeatherForecast")]
+    public async Task<ActionResult<WeatherInfo>> Post([FromBody] WeatherForecast entity)
+    {
+        
+        var proxy_response = await proxyHandler.solvePost(this.HttpContext.Request);
+        
+        WeatherInfo response = mapper.mapFrom(proxy_response);
+        return Ok(response);
+    }
 }

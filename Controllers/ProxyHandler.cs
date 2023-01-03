@@ -1,7 +1,13 @@
+using System.Net.Http.Headers;
+
 namespace proxy_app.Controllers
 {
     public class ProxyHandler
     {
+        public static string QUESTION_MARK = "?";
+        public static string WHITE_SPACE = " ";
+        public static string WHITE_SPACE_ENCODED = "%20";
+
         private readonly ClientService service;
 
         public ProxyHandler(ClientService service)
@@ -17,7 +23,18 @@ namespace proxy_app.Controllers
 
         private GetInfo GetInfoCollector(HttpRequest request)
         {
-            throw new NotImplementedException();
+            GetInfo getInfo = new GetInfo();
+            string pathInfo = request.Path;
+            var requestQuery = request.QueryString;
+            var queryString = requestQuery != null ?
+                                      String.Concat(QUESTION_MARK, requestQuery.Value)
+                                      : String.Empty;
+
+            var finalUrl = String.Concat(pathInfo, queryString)
+                              .Replace(WHITE_SPACE, WHITE_SPACE_ENCODED);
+
+            getInfo.URLToRequest = finalUrl;
+            return getInfo;
         }
 
         public async Task<string> solvePost(HttpRequest request)
@@ -35,67 +52,78 @@ namespace proxy_app.Controllers
 
     public class AppConfigurationInfo
     {
-        
+        public string BACK_END_URL => "http://probando.com";
     }
 
     public class ClientService
     {
-        private readonly AppConfigurationInfo info;
+        private ClientInfo clientInfo;
 
         HttpClient client;
 
-        public ClientService(AppConfigurationInfo info)
+        public ClientService(AppConfigurationInfo appConfigInfo)
         {
-            this.info = info;
+
             this.client = new HttpClient();
-            this.setUpClient();
+            this.clientInfo = this.setUpClient(appConfigInfo);
         }
 
-        private void setUpClient()
+        private ClientInfo setUpClient(AppConfigurationInfo appConfigInfo)
         {
             //take the appconfguratioInfo and sets up the client
+            var myBackEnd = new Uri(appConfigInfo.BACK_END_URL);
+            var host = myBackEnd.Host;
+            var baseURL = myBackEnd.GetLeftPart(UriPartial.Authority);
+            var protocol = baseURL.Contains("https") ? "HTTPS" : "HTTP";
+            var splitted = baseURL.Split(':');
+            var port = splitted.Length == 3 ? splitted[3] : "";
+
+            return new ClientInfo()
+            {
+                BACK_END_URL = appConfigInfo.BACK_END_URL,
+                BackEndHost = host,
+                BackEndPort = port,
+                BackEndProtocol = protocol
+            };
+
         }
 
         public async Task<string> MakeGet(GetInfo getInfo)
         {
-            client.BaseAddress= new Uri(getInfo.SourceUrl);
-            Uri destination = new Uri(getInfo.DestinationUrl);
-            var response= await client.GetStringAsync(destination);
-            return response;
+            string completeURL = String.Concat(clientInfo.BACK_END_URL, getInfo.URLToRequest);
+            using (var requestMessage = new HttpRequestMessage(HttpMethod.Get, completeURL))
+            {
+                requestMessage.Headers.Add("Content-Type", "application/json;charset=utf-8");
+
+
+                var received_response = await client.SendAsync(requestMessage);
+
+                return await received_response.Content.ReadAsStringAsync();
+            }
         }
 
         public async Task<string> MakePost(PostInfo postInfo)
         {
-            client.BaseAddress= new Uri(postInfo.SourceUrl);
-            Uri destination = new Uri(postInfo.DestinationUrl);
-            var response= await client.PostAsync(destination,postInfo.Content);
-            return response.Content!=null?response.Content.ToString():"";
+            throw new NotImplementedException();
         }
     }
 
-    public interface HttpBasicInfo
+    public class ClientInfo
     {
-        public string? SourceUrl { get; set; }
-        public string? SourcePort { get; set; }
-        public string? DestinationUrl {get;set;}
-        public string? DestinationPort { get; set; }
-
+        public string? BackEndHost { get; set; }
+        public string? BackEndPort { get; set; }
+        public string? BackEndProtocol { get; set; }
+        public string? BACK_END_URL { get; internal set; }
     }
 
-    public class PostInfo : HttpBasicInfo
+    public class PostInfo
     {
-        public string? SourceUrl {get;set;}
-        public string? SourcePort {get;set;}
-        public string? DestinationUrl {get;set;}
-        public string? DestinationPort {get;set;}
+        public string URLToRequest { get; set; }
         public HttpContent? Content { get; internal set; }
     }
 
-    public class GetInfo: HttpBasicInfo
+    public class GetInfo
     {
-        public string? SourceUrl {get;set;}
-        public string? SourcePort {get;set;}
-        public string? DestinationUrl {get;set;}
-        public string? DestinationPort {get;set;}
+        public string URLToRequest { get; set; }
     }
 }
